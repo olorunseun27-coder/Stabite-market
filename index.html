@@ -126,7 +126,7 @@
         .container { padding: 15px; max-width: 600px; margin: 0 auto; }
         .box { background: var(--box); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         
-        input, select, textarea { width: 100%; padding: 12px; margin: 5px 0 15px 0; background: var(--box); color: var(--text); border: 1px solid var(--border); border-radius: 5px; box-sizing: border-box; outline: none; }
+        input[type="text"], input[type="tel"], input[type="email"], input[type="password"], input[type="number"], select, textarea { width: 100%; padding: 12px; margin: 5px 0 15px 0; background: var(--box); color: var(--text); border: 1px solid var(--border); border-radius: 5px; box-sizing: border-box; outline: none; }
         
         /* --- BUTTONS --- */
         .btn-main { width: 100%; background: var(--primary); color: white; padding: 14px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px; }
@@ -296,7 +296,10 @@
     <div class="container">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
             <span id="userEmailDisplay" style="font-size:12px; opacity:0.7; font-weight:bold;"></span>
-            <button onclick="logout()" style="background:var(--red); color:white; border:none; padding:6px 12px; border-radius:15px; font-size:11px;">🚪 Logout</button>
+            <div>
+                <button onclick="window.openModal()" style="background:var(--primary); color:white; border:none; padding:6px 12px; border-radius:15px; font-size:11px; margin-right:5px; cursor:pointer;">⚙️ Manage Menu</button>
+                <button onclick="logout()" style="background:var(--red); color:white; border:none; padding:6px 12px; border-radius:15px; font-size:11px; cursor:pointer;">🚪 Logout</button>
+            </div>
         </div>
 
         <div class="box">
@@ -324,7 +327,7 @@
             <div style="display:flex; gap:10px; align-items:center;">
                 <select id="snackSelector" style="flex:3"><option value="">Select Snack...</option></select>
                 <input type="number" id="inputQty" value="1" min="1" placeholder="Qty" style="flex:1; text-align:center; min-width: 60px; font-weight:bold; border: 2px solid var(--primary);">
-                <button onclick="addToBasket()" style="flex:1; background:var(--primary); color:white; border:none; height:42px; border-radius:5px; font-size:20px; font-weight:bold; margin-bottom:12px;">+</button>
+                <button onclick="addToBasket()" style="flex:1; background:var(--primary); color:white; border:none; height:42px; border-radius:5px; font-size:20px; font-weight:bold; margin-bottom:12px; cursor:pointer;">+</button>
             </div>
 
             <div id="basketBox">
@@ -353,9 +356,9 @@
         <h3 style="display:flex; justify-content:space-between; align-items:center;">
             History 
             <div style="display:flex; gap:5px;">
-                <button onclick="window.openReportsModal()" style="background:var(--blue); color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px; margin-right:5px;">📊 Reports</button>
-                <button onclick="window.calcDailyStats(); document.getElementById('reportModal').style.display='block'" style="background:var(--primary); color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px;">📅 Today</button>
-                <button onclick="document.body.classList.toggle('dark-mode')" style="background:#333; color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px;">🌗</button>
+                <button onclick="window.openReportsModal()" style="background:var(--blue); color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px; margin-right:5px; cursor:pointer;">📊 Reports</button>
+                <button onclick="window.calcDailyStats(); document.getElementById('reportModal').style.display='block'" style="background:var(--primary); color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px; cursor:pointer;">📅 Today</button>
+                <button onclick="document.body.classList.toggle('dark-mode')" style="background:#333; color:white; border:none; border-radius:5px; font-size:11px; padding:5px 10px; cursor:pointer;">🌗</button>
             </div>
         </h3>
         <input type="search" id="searchBox" placeholder="🔍 Search name..." oninput="renderTable()">
@@ -488,15 +491,18 @@
     <span class="close-btn" onclick="closeModal()">&times;</span>
     <h3>⚙️ Manage Menu</h3>
     <input type="text" id="newItemName" placeholder="Snack Name">
-    <input type="number" id="newItemPrice" placeholder="Normal Price">
-    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (≥10 Items)" style="margin-top: -10px;">
+    <input type="number" id="newItemPrice" placeholder="Normal Price (e.g. 500)">
+    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (e.g. 450) [≥10 Items]">
+    
+    <label style="font-size:12px;font-weight:bold;">Product Image (Optional)</label>
+    <input type="file" id="newItemImage" accept="image/*" style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--border); border-radius: 5px; width: 100%; box-sizing: border-box;">
     
     <div style="margin-bottom:15px; display:flex; align-items:center; gap:10px; background:#f9f9f9; padding:10px; border-radius:5px;">
         <input type="checkbox" id="newItemAvail" checked style="width:auto; margin:0;">
         <label for="newItemAvail" style="font-size:13px; font-weight:bold;">Item is Available (In Stock)</label>
     </div>
 
-    <button class="btn-main" style="background:var(--green);" onclick="addSnackToFirebase()">Add Item</button>
+    <button id="addSnackBtnAction" class="btn-main" style="background:var(--green);" onclick="addSnackToFirebase()">Add Item</button>
     <div style="max-height: 200px; overflow-y: auto; margin-top: 15px;">
         <ul id="menuListUL" class="modal-list"></ul>
     </div>
@@ -584,6 +590,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, getDoc, getDocs, setDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
     // CONFIGURATION
     const firebaseConfig = {
@@ -599,6 +606,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
     
     // --- EMAILJS INIT ---
     // STEP 1: REPLACE 'YOUR_PUBLIC_KEY' BELOW
@@ -847,11 +855,11 @@
                 const btnText = isAvail ? 'Add' : 'Sold Out';
                 const btnState = isAvail ? `onclick="addToCustCart('${d.id}')"` : 'disabled';
                 
-                // Determine Image or Icon
-                const imgUrl = getProductImage(i.name);
+                // Determine Image or Icon - prioritizing the uploaded imgUrl if it exists
+                const finalImgUrl = i.imgUrl || getProductImage(i.name);
                 let visualContent = '';
-                if(imgUrl) {
-                    visualContent = `<div class="menu-img-box"><img src="${imgUrl}" class="menu-img" alt="${i.name}"></div>`;
+                if(finalImgUrl) {
+                    visualContent = `<div class="menu-img-box"><img src="${finalImgUrl}" class="menu-img" alt="${i.name}"></div>`;
                 } else {
                     visualContent = `<span class="menu-icon">${getFallbackIcon(i.name)}</span>`;
                 }
@@ -1400,23 +1408,52 @@
     
     window.delSale = async (id) => { if(confirm("Delete record?")) await deleteDoc(doc(db,"sales",id)); }
     
-    // --- WHOLESALE MENU UPDATES ---
+    // --- WHOLESALE & IMAGE UPLOAD UPDATES ---
     window.addSnackToFirebase = async () => {
         const n = document.getElementById('newItemName').value;
         const p = document.getElementById('newItemPrice').value;
         const wp = document.getElementById('newItemWholesalePrice').value;
         const avail = document.getElementById('newItemAvail').checked;
+        const fileInput = document.getElementById('newItemImage');
+        const file = fileInput.files[0];
+
         if(n && p) { 
-            await addDoc(collection(db,"menu"), {
-                name: n, 
-                price: Number(p),
-                wholesalePrice: wp ? Number(wp) : Number(p), // Fallback to normal price if left blank
-                isAvailable: avail 
-            }); 
-            document.getElementById('newItemName').value=''; 
-            document.getElementById('newItemPrice').value=''; 
-            document.getElementById('newItemWholesalePrice').value=''; 
-            showToast("Item Added"); 
+            const btn = document.getElementById('addSnackBtnAction');
+            btn.innerText = "Uploading & Saving...";
+            btn.disabled = true;
+
+            let uploadedImgUrl = null;
+
+            try {
+                // 1. Upload Image to Storage if file selected
+                if (file) {
+                    const imgRef = storageRef(storage, 'menu_images/' + Date.now() + '_' + file.name);
+                    await uploadBytes(imgRef, file);
+                    uploadedImgUrl = await getDownloadURL(imgRef);
+                }
+
+                // 2. Save to Firestore
+                await addDoc(collection(db,"menu"), {
+                    name: n, 
+                    price: Number(p),
+                    wholesalePrice: wp ? Number(wp) : Number(p), // Fallback to normal price if left blank
+                    isAvailable: avail,
+                    imgUrl: uploadedImgUrl // Save the generated URL
+                }); 
+                
+                document.getElementById('newItemName').value=''; 
+                document.getElementById('newItemPrice').value=''; 
+                document.getElementById('newItemWholesalePrice').value=''; 
+                fileInput.value = '';
+                showToast("Item Added"); 
+            } catch (error) {
+                alert("Error: " + error.message);
+            } finally {
+                btn.innerText = "Add Item";
+                btn.disabled = false;
+            }
+        } else {
+            showToast("Please enter a name and a normal price.");
         }
     }
 
@@ -1646,4 +1683,4 @@
     }
 </script>
 </body>
-        </html>
+    </html>
