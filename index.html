@@ -587,11 +587,11 @@
 
 <script type="module">
     // --- IMPORTS ---
+    // NOTE: Removed Firebase Storage imports entirely
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, getDoc, getDocs, setDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
-
+    
     // CONFIGURATION
     const firebaseConfig = {
       apiKey: "AIzaSyDj7Rqwjij9y8PLWT1I_1klamMWNWbVV0A",
@@ -606,7 +606,6 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const storage = getStorage(app);
     
     // --- EMAILJS INIT ---
     // STEP 1: REPLACE 'YOUR_PUBLIC_KEY' BELOW
@@ -800,7 +799,6 @@
 
     // --- CUSTOMER MENU LOGIC (V71 - REAL IMAGES) ---
     // High-quality public placeholder images for demo.
-    // In a real app, you would upload specific images to Firebase Storage.
     const snackImages = {
         "meat pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
         "chicken pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
@@ -855,7 +853,7 @@
                 const btnText = isAvail ? 'Add' : 'Sold Out';
                 const btnState = isAvail ? `onclick="addToCustCart('${d.id}')"` : 'disabled';
                 
-                // Determine Image or Icon - prioritizing the uploaded imgUrl if it exists
+                // Determine Image or Icon - prioritizing the base64 imgUrl if it exists
                 const finalImgUrl = i.imgUrl || getProductImage(i.name);
                 let visualContent = '';
                 if(finalImgUrl) {
@@ -1408,7 +1406,41 @@
     
     window.delSale = async (id) => { if(confirm("Delete record?")) await deleteDoc(doc(db,"sales",id)); }
     
-    // --- WHOLESALE & IMAGE UPLOAD UPDATES ---
+    // --- HELPER FUNCTION: Convert Image to Base64 Text and Compress it ---
+    const processImage = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    // Shrink to max 400px wide so the database doesn't crash from huge text strings
+                    const MAX_WIDTH = 400;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Compress it slightly (0.7 quality) and return the Base64 text string
+                    resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    // --- WHOLESALE & BASE64 TEXT IMAGE UPLOAD ---
     window.addSnackToFirebase = async () => {
         const n = document.getElementById('newItemName').value;
         const p = document.getElementById('newItemPrice').value;
@@ -1419,26 +1451,24 @@
 
         if(n && p) { 
             const btn = document.getElementById('addSnackBtnAction');
-            btn.innerText = "Uploading & Saving...";
+            btn.innerText = "Processing & Saving...";
             btn.disabled = true;
 
-            let uploadedImgUrl = null;
+            let uploadedImgBase64 = null;
 
             try {
-                // 1. Upload Image to Storage if file selected
+                // If they picked a file, convert it to a compressed text string
                 if (file) {
-                    const imgRef = storageRef(storage, 'menu_images/' + Date.now() + '_' + file.name);
-                    await uploadBytes(imgRef, file);
-                    uploadedImgUrl = await getDownloadURL(imgRef);
+                    uploadedImgBase64 = await processImage(file);
                 }
 
-                // 2. Save to Firestore
+                // Save to Firestore (Database)
                 await addDoc(collection(db,"menu"), {
                     name: n, 
                     price: Number(p),
                     wholesalePrice: wp ? Number(wp) : Number(p), // Fallback to normal price if left blank
                     isAvailable: avail,
-                    imgUrl: uploadedImgUrl // Save the generated URL
+                    imgUrl: uploadedImgBase64 // Save the text string directly! No storage needed.
                 }); 
                 
                 document.getElementById('newItemName').value=''; 
@@ -1683,4 +1713,4 @@
     }
 </script>
 </body>
-                </html>
+    </html>
