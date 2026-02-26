@@ -268,9 +268,9 @@
 
     <div style="background:#e8f5e9; border:1px solid #c8e6c9; padding:12px; border-radius:8px; margin-top:15px; text-align:center;">
         <h4 style="margin:0 0 5px 0; color:#2e7d32; font-size:14px;">💰 Payment Details</h4>
-        <p style="margin:0; font-size:13px;">Bank: <b>Your Bank Name</b></p>
-        <p style="margin:0; font-size:13px;">Acct Name: <b>Your Name</b></p>
-        <p style="margin:8px 0; font-size:20px; font-weight:bold; letter-spacing:2px; color:#333; background:white; display:inline-block; padding:5px 10px; border-radius:5px; border:1px dashed #28a745;">0123456789</p>
+        <p style="margin:0; font-size:13px;">Bank: <b>Opay</b></p>
+        <p style="margin:0; font-size:13px;">Acct Name: <b>Olorunleke .S. seun</b></p>
+        <p style="margin:8px 0; font-size:20px; font-weight:bold; letter-spacing:2px; color:#333; background:white; display:inline-block; padding:5px 10px; border-radius:5px; border:1px dashed #28a745;">8148180535</p>
         <br>
         <small style="color:#555; font-size:11px;">Please transfer the total amount above.</small>
     </div>
@@ -492,7 +492,8 @@
     <h3>⚙️ Manage Menu</h3>
     <input type="text" id="newItemName" placeholder="Snack Name">
     <input type="number" id="newItemPrice" placeholder="Normal Price (e.g. 500)">
-    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (e.g. 450) [≥10 Items]">
+    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (e.g. 450) [≥10 Items]" style="margin-top: -10px;">
+    <input type="number" id="newItemStock" placeholder="Initial Stock Quantity (e.g. 50)" style="margin-top: -10px;">
     
     <label style="font-size:12px;font-weight:bold;">Product Image (Optional)</label>
     <input type="file" id="newItemImage" accept="image/*" style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--border); border-radius: 5px; width: 100%; box-sizing: border-box;">
@@ -783,7 +784,7 @@
             .catch(e=>alert("Error: " + e.message));
     }
 
-    // --- CUSTOMER MENU LOGIC (V71 - REAL IMAGES) ---
+    // --- CUSTOMER MENU LOGIC (V71 - REAL IMAGES + STOCK) ---
     const snackImages = {
         "meat pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
         "chicken pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
@@ -833,7 +834,10 @@
                 const i = d.data();
                 window.custMenuRef[d.id] = i;
                 
-                const isAvail = i.isAvailable !== false; 
+                // STOCK CHECK - Hidden from user, but acts as trigger for SOLD OUT
+                const hasStock = i.stockQty === undefined || i.stockQty > 0;
+                const isAvail = i.isAvailable !== false && hasStock; 
+                
                 const soldOutClass = isAvail ? '' : 'sold-out';
                 const btnText = isAvail ? 'Add' : 'Sold Out';
                 const btnState = isAvail ? `onclick="addToCustCart('${d.id}')"` : 'disabled';
@@ -872,13 +876,23 @@
         }, (error) => { console.error("Menu Load Error:", error); });
     }
 
-    // --- CART & CHECKOUT LOGIC ---
+    // --- CART & CHECKOUT LOGIC WITH STOCK VALIDATION ---
     window.addToCustCart = (id) => {
         if(!window.custOrder[id]) window.custOrder[id] = 0;
         window.adjustCustQty(id, 1);
     }
 
     window.adjustCustQty = (id, delta) => {
+        const item = window.custMenuRef[id];
+        
+        // Ensure they can't add more than hidden stock
+        if(delta > 0 && item.stockQty !== undefined) {
+            if((window.custOrder[id] || 0) + delta > item.stockQty) {
+                window.showToast("Not enough stock available to add more.");
+                return;
+            }
+        }
+
         if(!window.custOrder[id]) window.custOrder[id] = 0;
         window.custOrder[id] += delta;
         
@@ -892,6 +906,13 @@
     window.manualCustQty = (id, val) => {
         let qty = parseInt(val);
         if(isNaN(qty) || qty < 0) qty = 0;
+        
+        const item = window.custMenuRef[id];
+        if(item && item.stockQty !== undefined && qty > item.stockQty) {
+            qty = item.stockQty; // Hard limit to available stock
+            window.showToast("Not enough stock available.");
+        }
+
         window.custOrder[id] = qty;
         updateCartUI();
     }
@@ -993,7 +1014,7 @@
         document.getElementById('finalCheckoutTotal').innerText = total.toLocaleString();
     }
 
-    // --- SUBMIT ORDER WITH EMAIL NOTIFICATION ---
+    // --- SUBMIT ORDER WITH STOCK AUTO-DEDUCT ---
     window.submitCustomerOrder = async () => {
         if(!window.currentCustomer) { alert("Session Error. Please reload."); return; }
         
@@ -1008,15 +1029,23 @@
         
         let items = [];
         let itemsString = "";
+        
         for (const [id, qty] of Object.entries(window.custOrder)) {
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
+                
                 const isWholesale = qty >= 10;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 
                 let txt = `${item.name} (x${qty} @ ₦${unitPrice})`;
                 items.push(txt);
                 itemsString += txt + "\n";
+                
+                // AUTO DEDUCT STOCK
+                if(item.stockQty !== undefined) {
+                    const newStock = Math.max(0, item.stockQty - qty);
+                    updateDoc(doc(db, "menu", id), { stockQty: newStock });
+                }
             }
         }
 
@@ -1089,9 +1118,13 @@
             ul.innerHTML = '';
             snap.forEach(d => {
                 const i = d.data(); menuData.push({id:d.id, ...i});
-                sel.innerHTML += `<option value="${d.id}">${i.name} - ₦${i.price}</option>`;
+                
+                // Show Admin the hidden stock number
+                const stockText = i.stockQty !== undefined ? i.stockQty : '∞';
+                sel.innerHTML += `<option value="${d.id}">${i.name} - ₦${i.price} (Stock: ${stockText})</option>`;
+                
                 ul.innerHTML += `<li class="modal-list-item">
-                    <span>${i.name} (₦${i.price} / Wholesale: ₦${i.wholesalePrice || i.price}) ${i.isAvailable===false?'<b style="color:red">[SOLD OUT]</b>':''}</span> 
+                    <span>${i.name} (₦${i.price} / W: ₦${i.wholesalePrice || i.price}) - <b style="color:var(--blue)">Stock: ${stockText}</b> ${i.isAvailable===false || i.stockQty <= 0 ?'<b style="color:red">[SOLD OUT]</b>':''}</span> 
                     <span style="color:red;cursor:pointer" onclick="window.delMenu('${d.id}')">🗑️</span>
                 </li>`;
             });
@@ -1270,8 +1303,19 @@
         const n=document.getElementById('custName').value, p=document.getElementById('custPhone').value, st=document.getElementById('paymentStatus').value;
         const dateInput = document.getElementById('saleDate').value;
         if(!n || currentBasket.length===0) { showToast("Enter name and add items"); return; }
+        
         let t=0, names=[];
-        currentBasket.forEach(i=>{ t+=i.total; names.push(`${i.name} (${i.qty} @ ₦${i.appliedPrice})`); });
+        currentBasket.forEach(i=>{ 
+            t+=i.total; 
+            names.push(`${i.name} (${i.qty} @ ₦${i.appliedPrice})`); 
+            
+            // ADMIN POS STOCK DEDUCTION
+            const itemInDb = menuData.find(m => m.id === i.id);
+            if(itemInDb && itemInDb.stockQty !== undefined) {
+                updateDoc(doc(db, "menu", i.id), { stockQty: Math.max(0, itemInDb.stockQty - i.qty) });
+            }
+        });
+        
         let ts = dateInput ? new Date(dateInput) : serverTimestamp();
         try {
             await addDoc(collection(db, "sales"), { custName:n, custPhone:p, items:names.join(", "), total:t, status:st, timestamp:ts });
@@ -1414,11 +1458,12 @@
         });
     };
 
-    // --- WHOLESALE & BASE64 TEXT IMAGE UPLOAD ---
+    // --- WHOLESALE, BASE64 TEXT IMAGE UPLOAD & STOCK UPLOAD ---
     window.addSnackToFirebase = async () => {
         const n = document.getElementById('newItemName').value;
         const p = document.getElementById('newItemPrice').value;
         const wp = document.getElementById('newItemWholesalePrice').value;
+        const sq = document.getElementById('newItemStock').value; // Get Stock
         const avail = document.getElementById('newItemAvail').checked;
         const fileInput = document.getElementById('newItemImage');
         const file = fileInput.files[0];
@@ -1439,6 +1484,7 @@
                     name: n, 
                     price: Number(p),
                     wholesalePrice: wp ? Number(wp) : Number(p),
+                    stockQty: sq ? Number(sq) : 0, // Save Stock
                     isAvailable: avail,
                     imgUrl: uploadedImgBase64 
                 }); 
@@ -1446,6 +1492,7 @@
                 document.getElementById('newItemName').value=''; 
                 document.getElementById('newItemPrice').value=''; 
                 document.getElementById('newItemWholesalePrice').value=''; 
+                document.getElementById('newItemStock').value='';
                 fileInput.value = '';
                 showToast("Item Added"); 
             } catch (error) {
@@ -1461,7 +1508,7 @@
 
     window.delMenu = async (id) => { if(confirm("Delete item?")) await deleteDoc(doc(db,"menu",id)); }
     
-    // --- ADMIN BASKET WHOLESALE LOGIC ---
+    // --- ADMIN BASKET WHOLESALE LOGIC WITH ADMIN STOCK CHECK ---
     window.addToBasket = () => {
         const sel = document.getElementById('snackSelector'), qtyInput = document.getElementById('inputQty');
         let qty = Number(qtyInput.value);
@@ -1471,6 +1518,12 @@
         const item = menuData.find(i => i.id === sel.value);
         const existing = currentBasket.find(x => x.id === item.id);
         
+        // Prevent admin from adding more than stock (Admin sees generic warning but knows stock from dropdown)
+        if (item.stockQty !== undefined && (existing ? existing.qty + qty : qty) > item.stockQty) {
+            window.showToast("Not enough stock! Current stock: " + item.stockQty);
+            return;
+        }
+
         if(existing) { 
             existing.qty += qty; 
             const unitPrice = (existing.qty >= 10 && item.wholesalePrice) ? item.wholesalePrice : item.price;
@@ -1493,11 +1546,19 @@
     }
 
     window.changeQty = (idx, delta) => {
+        const i = currentBasket[idx];
+        const item = menuData.find(x => x.id === i.id);
+        
+        // Block admin from increasing over stock
+        if (delta > 0 && item && item.stockQty !== undefined && i.qty + delta > item.stockQty) {
+            window.showToast("Not enough stock! Current stock: " + item.stockQty);
+            return;
+        }
+
         currentBasket[idx].qty += delta;
         if(currentBasket[idx].qty <= 0) {
             currentBasket.splice(idx, 1); 
         } else {
-            const i = currentBasket[idx];
             const unitPrice = (i.qty >= 10 && i.wholesalePrice) ? i.wholesalePrice : i.price;
             i.appliedPrice = unitPrice;
             i.total = unitPrice * i.qty;
