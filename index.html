@@ -14,7 +14,7 @@
             --text: #333; 
             --box: #fff; 
             --border: #ddd; 
-            --primary: #6f42c1; /* Starbite Purple */
+            --primary: #6f42c1; 
             --green: #28a745;
             --red: #dc3545;
             --orange: #fd7e14;
@@ -65,7 +65,7 @@
             position: relative; 
             overflow: hidden; 
             transition: 0.2s; 
-            padding-bottom: 10px; /* Space for buttons */
+            padding-bottom: 10px; 
         }
         
         /* V71 IMAGE STYLES */
@@ -90,7 +90,7 @@
         .menu-card.sold-out { opacity: 0.6; pointer-events: none; background: #f9f9f9; }
         .menu-card.sold-out::after { content: "SOLD OUT"; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); color: var(--red); font-weight: bold; border: 2px solid var(--red); padding: 5px 10px; border-radius: 5px; opacity: 1; font-size: 12px; white-space: nowrap; z-index: 10; background: rgba(255,255,255,0.8); }
 
-        .menu-icon { font-size: 40px; display: block; margin-top: 20px; } /* Fallback only */
+        .menu-icon { font-size: 40px; display: block; margin-top: 20px; } 
         
         .menu-details { padding: 10px 8px 0 8px; }
         .menu-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; display: block; color: #333; height: 36px; display: flex; align-items: flex-start; justify-content: center; overflow: hidden; line-height: 1.2; }
@@ -587,7 +587,6 @@
 
 <script type="module">
     // --- IMPORTS ---
-    // NOTE: Removed Firebase Storage imports entirely
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
     import { getFirestore, collection, addDoc, onSnapshot, getDoc, getDocs, setDoc, doc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, where } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
@@ -608,7 +607,6 @@
     const db = getFirestore(app);
     
     // --- EMAILJS INIT ---
-    // STEP 1: REPLACE 'YOUR_PUBLIC_KEY' BELOW
     emailjs.init("vzvGJIBXA7tWlRyta"); 
 
     // --- STATE VARIABLES ---
@@ -661,7 +659,6 @@
     // --- AUTHENTICATION & ROUTING ---
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            // Check Role Logic
             try {
                 const docSnap = await getDoc(doc(db, "users", user.uid));
                 if (docSnap.exists()) {
@@ -672,12 +669,10 @@
                     document.getElementById('userEmailDisplay').innerText = user.email;
 
                     if(role === 'admin' || role === 'staff') {
-                        // Show Admin Dashboard
                         document.getElementById('snackManagerTab').classList.add('active');
                         document.querySelector('.bottom-nav').style.display = 'flex';
-                        loadAdminData(); // Only load admin data if admin
+                        loadAdminData(); 
                     } else {
-                        // Customer Logic: Added email to local state for notifications
                         window.currentCustomer = { 
                             name: userData.name, 
                             phone: userData.phone, 
@@ -686,10 +681,9 @@
                         };
                         document.getElementById('welcomeName').innerText = userData.name.split(' ')[0];
                         document.getElementById('customerOrderSection').style.display = 'block';
-                        loadPublicMenu(); // Only load menu
+                        loadPublicMenu(); 
                     }
                 } else {
-                    // Fallback if user doc missing (assume customer)
                     alert("Profile incomplete. Please contact support.");
                     signOut(auth);
                 }
@@ -700,7 +694,6 @@
             }
         } else {
             document.getElementById('authOverlay').style.display = 'flex';
-            // Reset Views
             document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
             document.getElementById('customerOrderSection').style.display = 'none';
             document.querySelector('.bottom-nav').style.display = 'none';
@@ -710,7 +703,7 @@
     window.toggleAdminReg = () => {
         isAdminReg = !isAdminReg;
         document.getElementById('adminRegBadge').style.display = isAdminReg ? 'block' : 'none';
-        if(isAdminReg && !isRegisterMode) toggleAuthMode(); // Auto switch to signup
+        if(isAdminReg && !isRegisterMode) toggleAuthMode(); 
     }
 
     window.handleAuth = function() {
@@ -724,12 +717,10 @@
         btn.disabled = true;
 
         if(isRegisterMode) {
-            // REGISTER
             const name = document.getElementById('regName').value;
             const phone = document.getElementById('regPhone').value;
             const address = document.getElementById('regAddress').value;
 
-            // Validation for Customers
             if(!isAdminReg && (!name || !phone)) {
                 alert("Please enter Name and Phone.");
                 btn.disabled = false; btn.innerText = "Sign Up";
@@ -741,7 +732,6 @@
             createUserWithEmailAndPassword(auth, email, pass)
                 .then(async (cred) => {
                     try { 
-                        // Save User Profile
                         await setDoc(doc(db, "users", cred.user.uid), { 
                             email: email, 
                             role: role,
@@ -749,14 +739,12 @@
                             phone: phone || "",
                             address: address || ""
                         }); 
-                        // Also save to contacts if customer
                         if(role === 'customer') {
                              const safeId = name.replace(/\s+/g, '_').toLowerCase();
                              await setDoc(doc(db, "contacts", safeId), {name:name, phone:phone}, {merge:true});
                         }
                     } catch(e) { console.error(e); }
                     alert("Account Created!");
-                    // Reload to trigger AuthStateChanged
                     location.reload();
                 })
                 .catch((e) => { 
@@ -765,7 +753,6 @@
                     btn.disabled = false; 
                 });
         } else {
-            // LOGIN
             signInWithEmailAndPassword(auth, email, pass)
                 .then(() => {})
                 .catch((e) => { 
@@ -783,7 +770,6 @@
         document.getElementById('authTitle').innerText = isRegisterMode ? "Create Account" : "Login";
         document.getElementById('toggleAuth').innerText = isRegisterMode ? "Have an account? Login" : "Don't have an account? Sign Up";
         
-        // Toggle Registration Fields
         const fields = document.getElementById('regFields');
         if(isRegisterMode) fields.classList.remove('hidden'); else fields.classList.add('hidden');
     }
@@ -798,7 +784,6 @@
     }
 
     // --- CUSTOMER MENU LOGIC (V71 - REAL IMAGES) ---
-    // High-quality public placeholder images for demo.
     const snackImages = {
         "meat pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
         "chicken pie": "https://images.unsplash.com/photo-1572383672419-ab47799639dd?auto=format&fit=crop&w=500&q=80",
@@ -820,7 +805,7 @@
         for (const [key, url] of Object.entries(snackImages)) {
             if (lower.includes(key)) return url;
         }
-        return null; // Return null to trigger emoji fallback
+        return null;
     }
 
     function getFallbackIcon(name) {
@@ -853,7 +838,6 @@
                 const btnText = isAvail ? 'Add' : 'Sold Out';
                 const btnState = isAvail ? `onclick="addToCustCart('${d.id}')"` : 'disabled';
                 
-                // Determine Image or Icon - prioritizing the base64 imgUrl if it exists
                 const finalImgUrl = i.imgUrl || getProductImage(i.name);
                 let visualContent = '';
                 if(finalImgUrl) {
@@ -867,7 +851,7 @@
                     ${visualContent}
                     <div class="menu-details">
                         <span class="menu-title">${i.name}</span>
-                        <span class="menu-price">₦${i.price}</span>
+                        <span class="menu-price" id="price_${d.id}">₦${i.price}</span>
                         
                         <button class="add-btn" id="btn_${d.id}" ${btnState}>${btnText}</button>
                         
@@ -894,19 +878,17 @@
         window.adjustCustQty(id, 1);
     }
 
-    // 1. Handle Buttons
     window.adjustCustQty = (id, delta) => {
         if(!window.custOrder[id]) window.custOrder[id] = 0;
         window.custOrder[id] += delta;
         
         const input = document.getElementById('inp_' + id);
-        if(input) input.value = window.custOrder[id]; // Sync Input
+        if(input) input.value = window.custOrder[id]; 
 
         checkItemState(id);
         updateCartUI();
     }
     
-    // 2. Handle Typing
     window.manualCustQty = (id, val) => {
         let qty = parseInt(val);
         if(isNaN(qty) || qty < 0) qty = 0;
@@ -914,11 +896,9 @@
         updateCartUI();
     }
     
-    // 3. Handle Blur (Exit Input)
     window.blurQty = (id) => {
         if(!window.custOrder[id] || window.custOrder[id] <= 0) {
             window.custOrder[id] = 0;
-            // Reset UI to 'Add' button
             document.getElementById('btn_'+id).style.display = 'block';
             document.getElementById('ctrl_'+id).style.display = 'none';
         }
@@ -936,7 +916,6 @@
                 btn.style.display = 'none';
                 ctrl.style.display = 'flex';
                 input.value = window.custOrder[id];
-                // Visual feedback for selected item could be added here
             } else {
                 btn.style.display = 'block';
                 ctrl.style.display = 'none';
@@ -948,12 +927,21 @@
         let totalQty = 0;
         let totalPrice = 0;
         
-        for (const [id, qty] of Object.entries(window.custOrder)) {
-            if (qty > 0 && window.custMenuRef[id]) {
-                const item = window.custMenuRef[id];
-                // APPLY WHOLESALE IF >= 10
-                const unitPrice = (qty >= 10 && item.wholesalePrice) ? item.wholesalePrice : item.price;
-                
+        for (const [id, item] of Object.entries(window.custMenuRef)) {
+            const qty = window.custOrder[id] || 0;
+            const isWholesale = qty >= 10;
+            const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
+            
+            const priceEl = document.getElementById('price_' + id);
+            if (priceEl) {
+                if (isWholesale && item.wholesalePrice && item.wholesalePrice < item.price) {
+                    priceEl.innerHTML = `<s style="color:#999;font-size:11px;">₦${item.price}</s> ₦${item.wholesalePrice} <span style="color:var(--green);font-size:11px;"><br>(Wholesale)</span>`;
+                } else {
+                    priceEl.innerHTML = `₦${item.price}`;
+                }
+            }
+
+            if (qty > 0) {
                 totalQty += qty;
                 totalPrice += (unitPrice * qty);
             }
@@ -978,7 +966,6 @@
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
                 
-                // APPLY WHOLESALE IF >= 10
                 const isWholesale = qty >= 10;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 const lineTotal = unitPrice * qty;
@@ -1024,8 +1011,6 @@
         for (const [id, qty] of Object.entries(window.custOrder)) {
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
-                
-                // WHOLESALE CALCULATION FOR FIREBASE DB AND EMAIL
                 const isWholesale = qty >= 10;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 
@@ -1044,7 +1029,6 @@
         const total = (window.cartSubtotal || 0) + deliveryFee;
 
         try {
-            // 1. Write to Firestore
             await addDoc(collection(db, "orders"), {
                 custName: window.currentCustomer.name,
                 custPhone: window.currentCustomer.phone,
@@ -1057,7 +1041,6 @@
                 timestamp: serverTimestamp()
             });
 
-            // 2. Send Notification via EmailJS
             const templateParams = {
                 customer_name: window.currentCustomer.name,
                 customer_email: window.currentCustomer.email || "No Email",
@@ -1071,7 +1054,6 @@
                 console.error("Email failed:", emailErr);
             }
 
-            // 3. Reset UI
             window.custOrder = {};
             window.cartSubtotal = 0;
             updateCartUI();
@@ -1085,7 +1067,6 @@
             document.getElementById('checkoutModal').style.display = 'none';
             document.getElementById('modalOverlay').style.display = 'none';
             
-            // 4. In-App Notification
             alert("✅ Order Sent! Owner Notified.\nPlease check your bank app to complete payment.");
             
         } catch(e) { 
@@ -1099,7 +1080,6 @@
 
     // --- ADMIN DATA LOADERS ---
     function loadAdminData() {
-        // MENU LISTENER
         onSnapshot(collection(db, "menu"), (snap) => {
             menuData = [];
             const sel = document.getElementById('snackSelector');
@@ -1118,7 +1098,6 @@
             if(currentSel) sel.value = currentSel;
         });
 
-        // CONTACTS LISTENER
         onSnapshot(collection(db, "contacts"), (snap) => {
             customerData = [];
             const dl = document.getElementById('savedCustomers');
@@ -1132,7 +1111,6 @@
             renderQuickPicks();
         });
 
-        // SALES LISTENER
         onSnapshot(query(collection(db, "sales"), orderBy("timestamp", "desc")), (snap) => {
             salesData = []; let c=0, d=0;
             snap.forEach(doc => {
@@ -1146,17 +1124,15 @@
             renderTable();
         });
         
-        // MARKET LISTENER (Shared DB)
         onSnapshot(collection(db, "market"), (snap) => {
             marketData = [];
             snap.forEach(d => { marketData.push({id: d.id, ...d.data()}); });
             renderMarketList();
         });
 
-        // ORDERS LISTENER (NEW)
         onSnapshot(query(collection(db, "orders"), orderBy("timestamp", "desc")), (snap) => {
             incomingOrders = [];
-            window.ordersMap = {}; // Reset Map
+            window.ordersMap = {}; 
             let pendingCount = 0;
             const container = document.getElementById('incomingOrdersList');
             container.innerHTML = "";
@@ -1416,7 +1392,6 @@
                 img.src = e.target.result;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    // Shrink to max 400px wide so the database doesn't crash from huge text strings
                     const MAX_WIDTH = 400;
                     let width = img.width;
                     let height = img.height;
@@ -1431,7 +1406,6 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // Compress it slightly (0.7 quality) and return the Base64 text string
                     resolve(canvas.toDataURL('image/jpeg', 0.7)); 
                 };
                 img.onerror = (err) => reject(err);
@@ -1457,18 +1431,16 @@
             let uploadedImgBase64 = null;
 
             try {
-                // If they picked a file, convert it to a compressed text string
                 if (file) {
                     uploadedImgBase64 = await processImage(file);
                 }
 
-                // Save to Firestore (Database)
                 await addDoc(collection(db,"menu"), {
                     name: n, 
                     price: Number(p),
-                    wholesalePrice: wp ? Number(wp) : Number(p), // Fallback to normal price if left blank
+                    wholesalePrice: wp ? Number(wp) : Number(p),
                     isAvailable: avail,
-                    imgUrl: uploadedImgBase64 // Save the text string directly! No storage needed.
+                    imgUrl: uploadedImgBase64 
                 }); 
                 
                 document.getElementById('newItemName').value=''; 
@@ -1501,7 +1473,6 @@
         
         if(existing) { 
             existing.qty += qty; 
-            // Apply wholesale price if qty >= 10
             const unitPrice = (existing.qty >= 10 && item.wholesalePrice) ? item.wholesalePrice : item.price;
             existing.total = unitPrice * existing.qty; 
             existing.appliedPrice = unitPrice;
@@ -1527,7 +1498,6 @@
             currentBasket.splice(idx, 1); 
         } else {
             const i = currentBasket[idx];
-            // Apply wholesale price dynamically as qty changes
             const unitPrice = (i.qty >= 10 && i.wholesalePrice) ? i.wholesalePrice : i.price;
             i.appliedPrice = unitPrice;
             i.total = unitPrice * i.qty;
