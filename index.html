@@ -269,7 +269,7 @@
     <div style="background:#e8f5e9; border:1px solid #c8e6c9; padding:12px; border-radius:8px; margin-top:15px; text-align:center;">
         <h4 style="margin:0 0 5px 0; color:#2e7d32; font-size:14px;">💰 Payment Details</h4>
         <p style="margin:0; font-size:13px;">Bank: <b>Opay</b></p>
-        <p style="margin:0; font-size:13px;">Acct Name: <b>Olorunleke.S. Seun</b></p>
+        <p style="margin:0; font-size:13px;">Acct Name: <b>Olorunleke .S. Seun</b></p>
         <p style="margin:8px 0; font-size:20px; font-weight:bold; letter-spacing:2px; color:#333; background:white; display:inline-block; padding:5px 10px; border-radius:5px; border:1px dashed #28a745;">8148180535</p>
         <br>
         <small style="color:#555; font-size:11px;">Please transfer the total amount above.</small>
@@ -492,7 +492,10 @@
     <h3>⚙️ Manage Menu</h3>
     <input type="text" id="newItemName" placeholder="Snack Name">
     <input type="number" id="newItemPrice" placeholder="Normal Price (e.g. 500)">
-    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (e.g. 450) [≥10 Items]" style="margin-top: -10px;">
+    <input type="number" id="newItemWholesalePrice" placeholder="Wholesale Price (e.g. 450)" style="margin-top: -10px;">
+    
+    <input type="number" id="newItemWholesaleQty" placeholder="Min. Qty for Wholesale (Leave blank for NO discount)" style="margin-top: -10px;">
+    
     <input type="number" id="newItemStock" placeholder="Initial Stock Quantity (e.g. 50)" style="margin-top: -10px;">
     
     <label style="font-size:12px;font-weight:bold;">Product Image (Optional)</label>
@@ -695,7 +698,10 @@
             }
         } else {
             document.getElementById('authOverlay').style.display = 'flex';
-            document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+         document.querySelectorAll('.tab-content').forEach(t => {
+    t.style.display = ''; 
+    t.classList.remove('active');
+});
             document.getElementById('customerOrderSection').style.display = 'none';
             document.querySelector('.bottom-nav').style.display = 'none';
         }
@@ -950,7 +956,9 @@
         
         for (const [id, item] of Object.entries(window.custMenuRef)) {
             const qty = window.custOrder[id] || 0;
-            const isWholesale = qty >= 10;
+            
+            // DYNAMIC WHOLESALE THRESHOLD: No discount if left blank
+            const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
             const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
             
             const priceEl = document.getElementById('price_' + id);
@@ -987,7 +995,8 @@
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
                 
-                const isWholesale = qty >= 10;
+                // DYNAMIC WHOLESALE THRESHOLD
+                const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 const lineTotal = unitPrice * qty;
                 subtotal += lineTotal;
@@ -1034,7 +1043,8 @@
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
                 
-                const isWholesale = qty >= 10;
+                // DYNAMIC WHOLESALE THRESHOLD
+                const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 
                 let txt = `${item.name} (x${qty} @ ₦${unitPrice})`;
@@ -1121,6 +1131,8 @@
                 
                 // Show Admin the hidden stock number
                 const stockText = i.stockQty !== undefined ? i.stockQty : '∞';
+                const wQtyText = i.wholesaleQty ? `${i.wholesaleQty}+` : 'None';
+                
                 sel.innerHTML += `<option value="${d.id}">${i.name} - ₦${i.price} (Stock: ${stockText})</option>`;
                 
                 // REFILL BUTTON LOGIC: Show if stock is <= 0 OR marked unavailable
@@ -1128,7 +1140,7 @@
                 const refillBtn = isSoldOut ? `<button onclick="window.refillStock('${d.id}', ${i.stockQty || 0})" style="background:var(--blue); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer; margin-right:10px;">🔄 Refill</button>` : '';
 
                 ul.innerHTML += `<li class="modal-list-item">
-                    <span>${i.name} (₦${i.price} / W: ₦${i.wholesalePrice || i.price}) - <b style="color:var(--blue)">Stock: ${stockText}</b> ${isSoldOut ?'<b style="color:red">[SOLD OUT]</b>':''}</span> 
+                    <span>${i.name} (₦${i.price} / W: ₦${i.wholesalePrice || i.price} @ ${wQtyText}) - <b style="color:var(--blue)">Stock: ${stockText}</b> ${isSoldOut ?'<b style="color:red">[SOLD OUT]</b>':''}</span> 
                     <div style="display:flex; align-items:center;">
                         ${refillBtn}
                         <span style="color:red;cursor:pointer;font-size:16px;" onclick="window.delMenu('${d.id}')">🗑️</span>
@@ -1487,7 +1499,8 @@
         const n = document.getElementById('newItemName').value;
         const p = document.getElementById('newItemPrice').value;
         const wp = document.getElementById('newItemWholesalePrice').value;
-        const sq = document.getElementById('newItemStock').value; // Get Stock
+        const wq = document.getElementById('newItemWholesaleQty').value; 
+        const sq = document.getElementById('newItemStock').value; 
         const avail = document.getElementById('newItemAvail').checked;
         const fileInput = document.getElementById('newItemImage');
         const file = fileInput.files[0];
@@ -1508,7 +1521,8 @@
                     name: n, 
                     price: Number(p),
                     wholesalePrice: wp ? Number(wp) : Number(p),
-                    stockQty: sq ? Number(sq) : 0, // Save Stock
+                    wholesaleQty: wq ? Number(wq) : null, // Defaults to NO DISCOUNT if left blank
+                    stockQty: sq ? Number(sq) : 0, 
                     isAvailable: avail,
                     imgUrl: uploadedImgBase64 
                 }); 
@@ -1516,6 +1530,7 @@
                 document.getElementById('newItemName').value=''; 
                 document.getElementById('newItemPrice').value=''; 
                 document.getElementById('newItemWholesalePrice').value=''; 
+                document.getElementById('newItemWholesaleQty').value=''; 
                 document.getElementById('newItemStock').value='';
                 fileInput.value = '';
                 showToast("Item Added"); 
@@ -1542,7 +1557,7 @@
         const item = menuData.find(i => i.id === sel.value);
         const existing = currentBasket.find(x => x.id === item.id);
         
-        // Prevent admin from adding more than stock (Admin sees generic warning but knows stock from dropdown)
+        // Prevent admin from adding more than stock
         if (item.stockQty !== undefined && (existing ? existing.qty + qty : qty) > item.stockQty) {
             window.showToast("Not enough stock! Current stock: " + item.stockQty);
             return;
@@ -1550,17 +1565,20 @@
 
         if(existing) { 
             existing.qty += qty; 
-            const unitPrice = (existing.qty >= 10 && item.wholesalePrice) ? item.wholesalePrice : item.price;
+            const isWholesale = item.wholesaleQty ? existing.qty >= item.wholesaleQty : false;
+            const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
             existing.total = unitPrice * existing.qty; 
             existing.appliedPrice = unitPrice;
         } 
         else { 
-            const unitPrice = (qty >= 10 && item.wholesalePrice) ? item.wholesalePrice : item.price;
+            const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
+            const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
             currentBasket.push({
                 id: item.id, 
                 name: item.name, 
                 price: item.price, 
                 wholesalePrice: item.wholesalePrice, 
+                wholesaleQty: item.wholesaleQty || null,
                 appliedPrice: unitPrice, 
                 qty: qty, 
                 total: unitPrice * qty
@@ -1573,7 +1591,6 @@
         const i = currentBasket[idx];
         const item = menuData.find(x => x.id === i.id);
         
-        // Block admin from increasing over stock
         if (delta > 0 && item && item.stockQty !== undefined && i.qty + delta > item.stockQty) {
             window.showToast("Not enough stock! Current stock: " + item.stockQty);
             return;
@@ -1583,7 +1600,8 @@
         if(currentBasket[idx].qty <= 0) {
             currentBasket.splice(idx, 1); 
         } else {
-            const unitPrice = (i.qty >= 10 && i.wholesalePrice) ? i.wholesalePrice : i.price;
+            const isWholesale = i.wholesaleQty ? i.qty >= i.wholesaleQty : false;
+            const unitPrice = (isWholesale && i.wholesalePrice) ? i.wholesalePrice : i.price;
             i.appliedPrice = unitPrice;
             i.total = unitPrice * i.qty;
         }
@@ -1596,7 +1614,8 @@
         box.style.display='block'; lst.innerHTML=''; let tot=0;
         currentBasket.forEach((i, idx) => { 
             tot+=i.total; 
-            const tag = (i.qty >= 10 && i.wholesalePrice && i.wholesalePrice < i.price) ? `<b style="color:var(--green)">Wholesale</b>` : `Normal`;
+            const isWholesale = i.wholesaleQty ? i.qty >= i.wholesaleQty : false;
+            const tag = (isWholesale && i.wholesalePrice && i.wholesalePrice < i.price) ? `<b style="color:var(--green)">Wholesale</b>` : `Normal`;
             lst.innerHTML+=`<div class="basket-item"><div style="flex:2;"><b>${i.name}</b><br><span style="font-size:11px; opacity:0.7">@₦${i.appliedPrice} (${tag})</span></div><div class="qty-ctrl"><button class="qty-btn" onclick="window.changeQty(${idx}, -1)">-</button><span style="width:20px; text-align:center;">${i.qty}</span><button class="qty-btn" onclick="window.changeQty(${idx}, 1)">+</button></div><div style="flex:1; text-align:right;">₦${i.total.toLocaleString()}</div></div>`; 
         });
         document.getElementById('basketTotal').innerText=tot.toLocaleString();
@@ -1768,4 +1787,4 @@
     }
 </script>
 </body>
-    </html>
+                </html>
