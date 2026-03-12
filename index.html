@@ -157,8 +157,8 @@
 
         /* --- MODALS --- */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; backdrop-filter: blur(2px); }
-        .modal-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: var(--box); color: var(--text); padding: 25px; border-radius: 12px; z-index: 2001; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid var(--border); }
-        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #777; }
+        .modal-box { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 400px; background: var(--box); color: var(--text); padding: 25px; border-radius: 12px; z-index: 2001; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid var(--border); max-height: 90vh; overflow-y: auto; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #777; z-index: 999; }
         .modal-list { list-style:none; padding:0; margin:0; }
         .modal-list-item { display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #eee; }
         
@@ -414,7 +414,7 @@
     </table>
 </div>
 
-<div id="modalOverlay" class="modal-overlay"></div>
+<div id="modalOverlay" class="modal-overlay" onclick="closeModal()"></div>
 
 <div id="editMarketModal" class="modal-box" style="display:none;">
     <span class="close-btn" onclick="closeModal()">&times;</span>
@@ -587,8 +587,6 @@
     </div>
 </div>
 
-<div id="toast">Notification</div>
-
 <script type="module">
     // --- IMPORTS ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
@@ -685,6 +683,7 @@
                         };
                         document.getElementById('welcomeName').innerText = userData.name.split(' ')[0];
                         document.getElementById('customerOrderSection').style.display = 'block';
+                        
                         loadPublicMenu(); 
                     }
                 } else {
@@ -698,10 +697,10 @@
             }
         } else {
             document.getElementById('authOverlay').style.display = 'flex';
-         document.querySelectorAll('.tab-content').forEach(t => {
-    t.style.display = ''; 
-    t.classList.remove('active');
-});
+            document.querySelectorAll('.tab-content').forEach(t => {
+                t.style.display = ''; 
+                t.classList.remove('active');
+            });
             document.getElementById('customerOrderSection').style.display = 'none';
             document.querySelector('.bottom-nav').style.display = 'none';
         }
@@ -840,7 +839,7 @@
                 const i = d.data();
                 window.custMenuRef[d.id] = i;
                 
-                // STOCK CHECK - Hidden from user, but acts as trigger for SOLD OUT
+                // STOCK CHECK
                 const hasStock = i.stockQty === undefined || i.stockQty > 0;
                 const isAvail = i.isAvailable !== false && hasStock; 
                 
@@ -890,8 +889,6 @@
 
     window.adjustCustQty = (id, delta) => {
         const item = window.custMenuRef[id];
-        
-        // Ensure they can't add more than hidden stock
         if(delta > 0 && item.stockQty !== undefined) {
             if((window.custOrder[id] || 0) + delta > item.stockQty) {
                 window.showToast("Not enough stock available to add more.");
@@ -933,11 +930,9 @@
 
     function checkItemState(id) {
         if(window.custOrder[id] < 0) window.custOrder[id] = 0;
-        
         const btn = document.getElementById('btn_'+id);
         const ctrl = document.getElementById('ctrl_'+id);
         const input = document.getElementById('inp_'+id);
-        
         if(btn && ctrl && input) {
             if(window.custOrder[id] > 0) {
                 btn.style.display = 'none';
@@ -956,8 +951,6 @@
         
         for (const [id, item] of Object.entries(window.custMenuRef)) {
             const qty = window.custOrder[id] || 0;
-            
-            // DYNAMIC WHOLESALE THRESHOLD: No discount if left blank
             const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
             const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
             
@@ -994,8 +987,6 @@
         for (const [id, qty] of Object.entries(window.custOrder)) {
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
-                
-                // DYNAMIC WHOLESALE THRESHOLD
                 const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 const lineTotal = unitPrice * qty;
@@ -1023,35 +1014,30 @@
         document.getElementById('finalCheckoutTotal').innerText = total.toLocaleString();
     }
 
-    // --- SUBMIT ORDER WITH STOCK AUTO-DEDUCT ---
     window.submitCustomerOrder = async () => {
         if(!window.currentCustomer) { alert("Session Error. Please reload."); return; }
-        
         const btn = document.getElementById('confirmOrderBtn');
-        btn.innerText = "Sending...";
-        btn.disabled = true;
+        btn.innerText = "Sending..."; btn.disabled = true;
 
         const note = document.getElementById('checkoutNote').value;
         const deliveryFee = parseInt(document.getElementById('deliveryZone').value) || 0;
         const deliverySel = document.getElementById('deliveryZone');
         const deliveryText = deliverySel.options[deliverySel.selectedIndex].text;
         
-        let items = [];
-        let itemsString = "";
+        let items = []; let itemsString = "";
+        let totalItemsCount = 0; // To use in the WhatsApp message
         
         for (const [id, qty] of Object.entries(window.custOrder)) {
             if (qty > 0 && window.custMenuRef[id]) {
                 const item = window.custMenuRef[id];
-                
-                // DYNAMIC WHOLESALE THRESHOLD
                 const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
                 const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
                 
                 let txt = `${item.name} (x${qty} @ ₦${unitPrice})`;
-                items.push(txt);
-                itemsString += txt + "\n";
+                items.push(txt); itemsString += txt + "\n";
+                totalItemsCount += qty;
                 
-                // AUTO DEDUCT STOCK
+                // Deduct stock
                 if(item.stockQty !== undefined) {
                     const newStock = Math.max(0, item.stockQty - qty);
                     updateDoc(doc(db, "menu", id), { stockQty: newStock });
@@ -1059,15 +1045,22 @@
             }
         }
 
-        if(items.length === 0) {
-            btn.innerText = "Confirm Order";
-            btn.disabled = false;
-            return;
-        }
-
+        if(items.length === 0) { btn.innerText = "Confirm Order"; btn.disabled = false; return; }
         const total = (window.cartSubtotal || 0) + deliveryFee;
 
+        // --- WHATSAPP LINK GENERATOR ---
+        let phoneNumber = window.currentCustomer.phone || "";
+        phoneNumber = phoneNumber.replace(/[\s-]/g, '');
+        if (phoneNumber.startsWith('0')) {
+            phoneNumber = '234' + phoneNumber.substring(1);
+        }
+        
+        let autoMessage = "Hello " + window.currentCustomer.name + "! This is STARBITE STORE. 🌟 Great news—your order for " + totalItemsCount + " items is hot, fresh, and ready! Let us know if you are picking it up or need delivery.";
+        let finalLink = 'https://wa.me/' + phoneNumber + '?text=' + encodeURIComponent(autoMessage);
+        // ------------------------------------
+
         try {
+            // 1. Save to Firebase Database
             await addDoc(collection(db, "orders"), {
                 custName: window.currentCustomer.name,
                 custPhone: window.currentCustomer.phone,
@@ -1080,42 +1073,30 @@
                 timestamp: serverTimestamp()
             });
 
+            // 2. Send Email via EmailJS (Includes the WhatsApp Link)
             const templateParams = {
                 customer_name: window.currentCustomer.name,
                 customer_email: window.currentCustomer.email || "No Email",
-                order_details: itemsString + "\nNote: " + (note || "None") + "\nTotal: ₦" + total,
+                order_details: itemsString + "\nNote: " + (note || "None") + "\nTotal: ₦" + total + "\n\n📲 CLICK HERE TO WHATSAPP CUSTOMER:\n" + finalLink,
             };
             
-            try {
-                await emailjs.send('service_4ahwty5', 'template_v6cbqrs', templateParams);
-                console.log("Email Notification Sent");
-            } catch (emailErr) {
-                console.error("Email failed:", emailErr);
-            }
+            try { await emailjs.send('service_4ahwty5', 'template_v6cbqrs', templateParams); } 
+            catch (emailErr) { console.error("Email failed:", emailErr); }
 
-            window.custOrder = {};
-            window.cartSubtotal = 0;
-            updateCartUI();
-            
+            // 3. Clear cart and UI
+            window.custOrder = {}; window.cartSubtotal = 0; updateCartUI();
             Object.keys(window.custMenuRef).forEach(id => {
-                 const b = document.getElementById('btn_'+id);
-                 const c = document.getElementById('ctrl_'+id);
+                 const b = document.getElementById('btn_'+id); const c = document.getElementById('ctrl_'+id);
                  if(b && c) { b.style.display='block'; c.style.display='none'; }
             });
 
             document.getElementById('checkoutModal').style.display = 'none';
             document.getElementById('modalOverlay').style.display = 'none';
-            
             alert("✅ Order Sent! Owner Notified.\nPlease check your bank app to complete payment.");
             
-        } catch(e) { 
-            alert("Error sending order: " + e.message); 
-        } finally {
-            btn.innerText = "✅ Notify Payment & Confirm Order";
-            btn.disabled = false;
-        }
+        } catch(e) { alert("Error sending order: " + e.message); } 
+        finally { btn.innerText = "✅ Notify Payment & Confirm Order"; btn.disabled = false; }
     }
-
 
     // --- ADMIN DATA LOADERS ---
     function loadAdminData() {
@@ -1128,23 +1109,14 @@
             ul.innerHTML = '';
             snap.forEach(d => {
                 const i = d.data(); menuData.push({id:d.id, ...i});
-                
-                // Show Admin the hidden stock number
                 const stockText = i.stockQty !== undefined ? i.stockQty : '∞';
                 const wQtyText = i.wholesaleQty ? `${i.wholesaleQty}+` : 'None';
-                
                 sel.innerHTML += `<option value="${d.id}">${i.name} - ₦${i.price} (Stock: ${stockText})</option>`;
-                
-                // REFILL BUTTON LOGIC: Show if stock is <= 0 OR marked unavailable
                 const isSoldOut = i.isAvailable === false || i.stockQty <= 0;
                 const refillBtn = isSoldOut ? `<button onclick="window.refillStock('${d.id}', ${i.stockQty || 0})" style="background:var(--blue); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer; margin-right:10px;">🔄 Refill</button>` : '';
-
                 ul.innerHTML += `<li class="modal-list-item">
                     <span>${i.name} (₦${i.price} / W: ₦${i.wholesalePrice || i.price} @ ${wQtyText}) - <b style="color:var(--blue)">Stock: ${stockText}</b> ${isSoldOut ?'<b style="color:red">[SOLD OUT]</b>':''}</span> 
-                    <div style="display:flex; align-items:center;">
-                        ${refillBtn}
-                        <span style="color:red;cursor:pointer;font-size:16px;" onclick="window.delMenu('${d.id}')">🗑️</span>
-                    </div>
+                    <div style="display:flex; align-items:center;">${refillBtn}<span style="color:red;cursor:pointer;font-size:16px;" onclick="window.delMenu('${d.id}')">🗑️</span></div>
                 </li>`;
             });
             if(currentSel) sel.value = currentSel;
@@ -1152,13 +1124,8 @@
 
         onSnapshot(collection(db, "contacts"), (snap) => {
             customerData = [];
-            const dl = document.getElementById('savedCustomers');
-            dl.innerHTML = '';
-            snap.forEach(d => {
-                const c = d.data();
-                customerData.push({id:d.id, ...c});
-                dl.innerHTML += `<option value="${c.name}">`;
-            });
+            const dl = document.getElementById('savedCustomers'); dl.innerHTML = '';
+            snap.forEach(d => { const c = d.data(); customerData.push({id:d.id, ...c}); dl.innerHTML += `<option value="${c.name}">`; });
             customerData.sort((a,b) => a.name.localeCompare(b.name));
             renderQuickPicks();
         });
@@ -1183,12 +1150,8 @@
         });
 
         onSnapshot(query(collection(db, "orders"), orderBy("timestamp", "desc")), (snap) => {
-            incomingOrders = [];
-            window.ordersMap = {}; 
-            let pendingCount = 0;
-            const container = document.getElementById('incomingOrdersList');
-            container.innerHTML = "";
-            
+            incomingOrders = []; window.ordersMap = {}; let pendingCount = 0;
+            const container = document.getElementById('incomingOrdersList'); container.innerHTML = "";
             snap.forEach(doc => {
                 const o = doc.data();
                 const date = o.timestamp ? o.timestamp.toDate().toLocaleString() : "Just now";
@@ -1197,18 +1160,12 @@
                 if(o.status !== "Archived") {
                     const noteHtml = o.note ? `<div style="background:#fff3cd; color:#856404; padding:5px; margin:5px 0; font-size:13px; border-radius:4px; border:1px solid #ffeeba;">📝 ${o.note}</div>` : '';
                     const addressHtml = o.custAddress ? `<div style="font-size:12px; color:#555; margin-bottom:5px;">📍 ${o.custAddress}</div>` : '';
-
                     container.innerHTML += `
                     <div class="box" style="border-left: 5px solid ${o.status==='Pending'?'var(--orange)':'var(--green)'}">
-                        <div style="display:flex; justify-content:space-between;">
-                            <b>${o.custName}</b>
-                            <small>${date}</small>
-                        </div>
+                        <div style="display:flex; justify-content:space-between;"><b>${o.custName}</b><small>${date}</small></div>
                         ${addressHtml}
-                        <div style="margin:5px 0; color:#555;">${o.items}</div>
-                        ${noteHtml}
+                        <div style="margin:5px 0; color:#555;">${o.items}</div>${noteHtml}
                         <div style="font-weight:bold; margin-bottom:10px;">Total: ₦${o.total.toLocaleString()}</div>
-                        
                         ${o.status === 'Pending' ? `
                         <div style="display:flex; gap:10px;">
                             <a href="tel:${o.custPhone}" class="btn-contact" style="text-decoration:none; justify-content:center;">📞 Call</a>
@@ -1227,14 +1184,9 @@
     }
 
     // --- REPORT LOGIC ---
-    window.openReportsModal = () => {
-        document.getElementById('dlReportModal').style.display='block';
-        document.getElementById('modalOverlay').style.display='block';
-    }
-
+    window.openReportsModal = () => { document.getElementById('dlReportModal').style.display='block'; document.getElementById('modalOverlay').style.display='block'; }
     window.setReportPeriod = (type) => {
-        const now = new Date();
-        let start = new Date();
+        const now = new Date(); let start = new Date();
         document.querySelectorAll('.report-btn').forEach(b => b.classList.remove('active'));
         event.target.classList.add('active');
         if(type === 'daily') start.setHours(0,0,0,0);
@@ -1248,25 +1200,13 @@
         if(filteredReportData.length > 0) { btn.disabled = false; btn.style.background = 'var(--primary)'; btn.innerText = `Download ${type.toUpperCase()} Report`; }
         else { btn.disabled = true; btn.style.background = '#777'; btn.innerText = "No Records Found"; }
     }
-
     window.downloadCSV = () => {
         if(filteredReportData.length === 0) return;
-        let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
-        csvContent += "Date,Time,Customer,Items,Total,Status\n";
-        filteredReportData.forEach(row => {
-            let date = row.dateObj.toLocaleDateString();
-            let time = row.dateObj.toLocaleTimeString();
-            let items = row.items.replace(/,/g, ";");
-            csvContent += `${date},${time},${row.custName},"${items}",${row.total},${row.status}\n`;
-        });
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "starbite_report.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.closeModal();
+        let csvContent = "data:text/csv;charset=utf-8,\uFEFFDate,Time,Customer,Items,Total,Status\n";
+        filteredReportData.forEach(row => { csvContent += `${row.dateObj.toLocaleDateString()},${row.dateObj.toLocaleTimeString()},${row.custName},"${row.items.replace(/,/g, ";")}",${row.total},${row.status}\n`; });
+        const encodedUri = encodeURI(csvContent); const link = document.createElement("a");
+        link.setAttribute("href", encodedUri); link.setAttribute("download", "starbite_report.csv");
+        document.body.appendChild(link); link.click(); document.body.removeChild(link); window.closeModal();
     }
 
     // --- TAB 1: MANAGER LOGIC ---
@@ -1274,28 +1214,17 @@
         currentDebtViewName = name;
         const debts = salesData.filter(s => s.custName === name && s.status === 'Pay Later');
         if(debts.length === 0) { showToast("No pending debts for " + name); return; }
-        const listBody = document.getElementById('debtListBody');
-        listBody.innerHTML = ''; let total = 0;
-        debts.forEach(d => {
-            total += d.total;
-            listBody.innerHTML += `<tr style="border-bottom:1px solid #eee;">
-                <td style="padding:5px; font-size:12px;">${d.dateObj.toLocaleDateString()}</td>
-                <td style="padding:5px; font-size:13px;">${d.items}</td>
-                <td style="padding:5px; font-weight:bold;">₦${d.total}</td>
-            </tr>`;
-        });
-        document.getElementById('debtCustName').innerText = name;
-        document.getElementById('debtTotalVal').innerText = total.toLocaleString();
-        document.getElementById('debtModal').style.display = 'block';
-        document.getElementById('modalOverlay').style.display = 'block';
+        const listBody = document.getElementById('debtListBody'); listBody.innerHTML = ''; let total = 0;
+        debts.forEach(d => { total += d.total; listBody.innerHTML += `<tr style="border-bottom:1px solid #eee;"><td style="padding:5px; font-size:12px;">${d.dateObj.toLocaleDateString()}</td><td style="padding:5px; font-size:13px;">${d.items}</td><td style="padding:5px; font-weight:bold;">₦${d.total}</td></tr>`; });
+        document.getElementById('debtCustName').innerText = name; document.getElementById('debtTotalVal').innerText = total.toLocaleString();
+        document.getElementById('debtModal').style.display = 'block'; document.getElementById('modalOverlay').style.display = 'block';
     }
 
     window.shareDebtProfile = () => {
         if(!currentDebtViewName) return;
         const debts = salesData.filter(s => s.custName === currentDebtViewName && s.status === 'Pay Later');
         if(debts.length === 0) return;
-        let total = 0;
-        let msg = `*DEBT REMINDER - STARBITE*\nHello ${currentDebtViewName}, here is a breakdown of outstanding items:\n\n`;
+        let total = 0; let msg = `*DEBT REMINDER - STARBITE*\nHello ${currentDebtViewName}, here is a breakdown of outstanding items:\n\n`;
         debts.forEach(d => { total += d.total; msg += `📅 ${d.dateObj.toLocaleDateString()}\n🛒 ${d.items}\n💰 ₦${d.total}\n----------------\n`; });
         msg += `*TOTAL PENDING: ₦${total.toLocaleString()}*`;
         const cust = customerData.find(c => c.name === currentDebtViewName);
@@ -1305,9 +1234,7 @@
 
     window.openContacts = () => {
         const ul = document.getElementById('contactsListUL'); ul.innerHTML = '';
-        customerData.forEach(c => {
-            ul.innerHTML += `<li class="modal-list-item"><span onclick="window.fillCust('${c.name}', '${c.phone}'); window.closeModal()" style="cursor:pointer; flex:1;">👤 ${c.name}</span><span style="color:var(--red); cursor:pointer;" onclick="window.delContact('${c.id}')">🗑️</span></li>`;
-        });
+        customerData.forEach(c => { ul.innerHTML += `<li class="modal-list-item"><span onclick="window.fillCust('${c.name}', '${c.phone}'); window.closeModal()" style="cursor:pointer; flex:1;">👤 ${c.name}</span><span style="color:var(--red); cursor:pointer;" onclick="window.delContact('${c.id}')">🗑️</span></li>`; });
         document.getElementById('contactsModal').style.display = 'block'; document.getElementById('modalOverlay').style.display = 'block';
     }
 
@@ -1325,14 +1252,9 @@
         
         let t=0, names=[];
         currentBasket.forEach(i=>{ 
-            t+=i.total; 
-            names.push(`${i.name} (${i.qty} @ ₦${i.appliedPrice})`); 
-            
-            // ADMIN POS STOCK DEDUCTION
+            t+=i.total; names.push(`${i.name} (${i.qty} @ ₦${i.appliedPrice})`); 
             const itemInDb = menuData.find(m => m.id === i.id);
-            if(itemInDb && itemInDb.stockQty !== undefined) {
-                updateDoc(doc(db, "menu", i.id), { stockQty: Math.max(0, itemInDb.stockQty - i.qty) });
-            }
+            if(itemInDb && itemInDb.stockQty !== undefined) { updateDoc(doc(db, "menu", i.id), { stockQty: Math.max(0, itemInDb.stockQty - i.qty) }); }
         });
         
         let ts = dateInput ? new Date(dateInput) : serverTimestamp();
@@ -1345,51 +1267,35 @@
         } catch(e) { showToast("Error: " + e.message); }
     }
     
-    // APPROVE ORDER LOGIC
     window.initApprove = (orderId, name, phone, items, total) => {
         window.tempOrderData = { id: orderId, name, phone, items, total };
         document.getElementById('approveAmount').innerText = total.toLocaleString();
-        document.getElementById('approveModal').style.display = 'block';
-        document.getElementById('modalOverlay').style.display = 'block';
+        document.getElementById('approveModal').style.display = 'block'; document.getElementById('modalOverlay').style.display = 'block';
     }
 
     window.finishApproval = async (status) => {
-        const o = window.tempOrderData;
-        if(!o) return;
+        const o = window.tempOrderData; if(!o) return;
         try {
             await addDoc(collection(db, "sales"), { custName: o.name, custPhone: o.phone, items: o.items, total: o.total, status: status, timestamp: serverTimestamp() });
             const safeId = o.name.replace(/\s+/g, '_').toLowerCase();
             if(!customerData.find(c => c.id === safeId)) { await setDoc(doc(db, "contacts", safeId), {name:o.name, phone:o.phone}, {merge:true}); }
             await updateDoc(doc(db, "orders", o.id), { status: "Approved" });
-            showToast(`Order Recorded as ${status}!`);
-            window.closeModal(); window.tempOrderData = null;
+            showToast(`Order Recorded as ${status}!`); window.closeModal(); window.tempOrderData = null;
         } catch(e) { showToast("Error: " + e.message); }
     }
     
-    // EDIT ORDER LOGIC
     window.openEditOrder = (id) => {
-        const order = window.ordersMap[id];
-        if(!order) return;
-        document.getElementById('editOrderId').value = id;
-        document.getElementById('editOrderName').value = order.custName;
-        document.getElementById('editOrderPhone').value = order.custPhone;
-        document.getElementById('editOrderItems').value = order.items;
-        document.getElementById('editOrderNote').value = order.note || "";
-        document.getElementById('editOrderTotal').value = order.total;
-        document.getElementById('editOrderModal').style.display = 'block';
-        document.getElementById('modalOverlay').style.display = 'block';
+        const order = window.ordersMap[id]; if(!order) return;
+        document.getElementById('editOrderId').value = id; document.getElementById('editOrderName').value = order.custName;
+        document.getElementById('editOrderPhone').value = order.custPhone; document.getElementById('editOrderItems').value = order.items;
+        document.getElementById('editOrderNote').value = order.note || ""; document.getElementById('editOrderTotal').value = order.total;
+        document.getElementById('editOrderModal').style.display = 'block'; document.getElementById('modalOverlay').style.display = 'block';
     }
 
     window.saveOrderChanges = async () => {
         const id = document.getElementById('editOrderId').value;
         try {
-            await updateDoc(doc(db, "orders", id), {
-                custName: document.getElementById('editOrderName').value,
-                custPhone: document.getElementById('editOrderPhone').value,
-                items: document.getElementById('editOrderItems').value,
-                note: document.getElementById('editOrderNote').value,
-                total: parseFloat(document.getElementById('editOrderTotal').value)
-            });
+            await updateDoc(doc(db, "orders", id), { custName: document.getElementById('editOrderName').value, custPhone: document.getElementById('editOrderPhone').value, items: document.getElementById('editOrderItems').value, note: document.getElementById('editOrderNote').value, total: parseFloat(document.getElementById('editOrderTotal').value) });
             window.closeModal(); showToast("Order Updated Successfully");
         } catch(e) { showToast("Error updating: " + e.message); }
     }
@@ -1397,21 +1303,13 @@
     window.archiveOrder = async (id) => { if(confirm("Remove this order from list?")) { await updateDoc(doc(db, "orders", id), { status: "Archived" }); } }
 
     window.renderTable = function() {
-        const tb = document.getElementById('tableBody');
-        const sVal = document.getElementById('searchBox').value.toLowerCase();
-        tb.innerHTML = '';
+        const tb = document.getElementById('tableBody'); const sVal = document.getElementById('searchBox').value.toLowerCase(); tb.innerHTML = '';
         salesData.forEach(i => {
             if(sVal && !i.custName.toLowerCase().includes(sVal)) return;
-            let stCls = i.status==='Paid'?'status-paid':'status-owed';
-            let stText = i.status==='Paid'?'✅ Paid':'❌ Debt';
+            let stCls = i.status==='Paid'?'status-paid':'status-owed'; let stText = i.status==='Paid'?'✅ Paid':'❌ Debt';
             let dateStr = i.dateObj.toLocaleDateString() + ' ' + i.dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             let payBtn = i.status === 'Pay Later' ? `<button class="action-btn btn-pay" onclick="window.markPaid('${i.id}')" title="Mark as Paid">💸</button>` : '';
-            tb.innerHTML += `<tr>
-                <td><b class="cust-link" onclick="window.viewCustomerDebt('${i.custName}')">${i.custName}</b><br><span style="font-size:11px; opacity:0.7;">${dateStr}</span></td>
-                <td style="font-size:13px; opacity:0.8;">${i.items}<br><span class="${stCls}">${stText}</span></td>
-                <td style="font-weight:bold;">₦${i.total.toLocaleString()}</td>
-                <td style="white-space:nowrap;">${payBtn} <button class="action-btn btn-edit" onclick="window.openEdit('${i.id}')">✏️</button> <button class="action-btn btn-del" onclick="window.delSale('${i.id}')">🗑️</button></td>
-            </tr>`;
+            tb.innerHTML += `<tr><td><b class="cust-link" onclick="window.viewCustomerDebt('${i.custName}')">${i.custName}</b><br><span style="font-size:11px; opacity:0.7;">${dateStr}</span></td><td style="font-size:13px; opacity:0.8;">${i.items}<br><span class="${stCls}">${stText}</span></td><td style="font-weight:bold;">₦${i.total.toLocaleString()}</td><td style="white-space:nowrap;">${payBtn} <button class="action-btn btn-edit" onclick="window.openEdit('${i.id}')">✏️</button> <button class="action-btn btn-del" onclick="window.delSale('${i.id}')">🗑️</button></td></tr>`;
         });
     }
 
@@ -1419,10 +1317,8 @@
     
     window.openEdit = (id) => {
         const sale = salesData.find(s => s.id === id); if(!sale) return;
-        document.getElementById('editId').value = id;
-        document.getElementById('editName').value = sale.custName;
-        document.getElementById('editTotal').value = sale.total;
-        document.getElementById('editItems').value = sale.items; 
+        document.getElementById('editId').value = id; document.getElementById('editName').value = sale.custName;
+        document.getElementById('editTotal').value = sale.total; document.getElementById('editItems').value = sale.items; 
         document.getElementById('editStatus').value = sale.status;
         if(sale.dateObj) { document.getElementById('editDate').value = new Date(sale.dateObj.getTime() - sale.dateObj.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
         document.getElementById('editSaleModal').style.display = 'block'; document.getElementById('modalOverlay').style.display = 'block';
@@ -1431,179 +1327,75 @@
     window.saveEditedSale = async () => {
         const id = document.getElementById('editId').value, name = document.getElementById('editName').value;
         if(!id || !name) return;
-        try {
-            await updateDoc(doc(db, "sales", id), { 
-                custName: name, 
-                total: Number(document.getElementById('editTotal').value), 
-                items: document.getElementById('editItems').value, 
-                status: document.getElementById('editStatus').value,
-                timestamp: new Date(document.getElementById('editDate').value)
-            });
-            window.closeModal(); showToast("Record Updated!");
-        } catch(e) { showToast("Error: " + e.message); }
+        try { await updateDoc(doc(db, "sales", id), { custName: name, total: Number(document.getElementById('editTotal').value), items: document.getElementById('editItems').value, status: document.getElementById('editStatus').value, timestamp: new Date(document.getElementById('editDate').value) }); window.closeModal(); showToast("Record Updated!"); } catch(e) { showToast("Error: " + e.message); }
     }
     
     window.delSale = async (id) => { if(confirm("Delete record?")) await deleteDoc(doc(db,"sales",id)); }
     
-    // --- HELPER FUNCTION: Convert Image to Base64 Text and Compress it ---
     const processImage = (file) => {
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
+            const reader = new FileReader(); reader.readAsDataURL(file);
             reader.onload = (e) => {
-                const img = new Image();
-                img.src = e.target.result;
+                const img = new Image(); img.src = e.target.result;
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 400;
-                    let width = img.width;
-                    let height = img.height;
-                    
-                    if (width > MAX_WIDTH) {
-                        height *= MAX_WIDTH / width;
-                        width = MAX_WIDTH;
-                    }
-                    
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    resolve(canvas.toDataURL('image/jpeg', 0.7)); 
-                };
-                img.onerror = (err) => reject(err);
-            };
-            reader.onerror = (err) => reject(err);
+                    const canvas = document.createElement('canvas'); const MAX_WIDTH = 400; let width = img.width; let height = img.height;
+                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+                }; img.onerror = (err) => reject(err);
+            }; reader.onerror = (err) => reject(err);
         });
     };
 
-    // --- REFILL STOCK LOGIC ---
     window.refillStock = async (id, currentStock) => {
         const amount = prompt("📦 Enter quantity of new stock arriving:");
         if (amount && !isNaN(amount) && Number(amount) > 0) {
             const newStock = Number(currentStock) + Number(amount);
-            try {
-                await updateDoc(doc(db, "menu", id), { 
-                    stockQty: newStock,
-                    isAvailable: true // Automatically make it available again to customers
-                });
-                showToast("✅ Stock Refilled Successfully!");
-            } catch (e) {
-                showToast("Error updating stock: " + e.message);
-            }
+            try { await updateDoc(doc(db, "menu", id), { stockQty: newStock, isAvailable: true }); showToast("✅ Stock Refilled Successfully!"); } catch (e) { showToast("Error updating stock: " + e.message); }
         }
     }
 
-    // --- WHOLESALE, BASE64 TEXT IMAGE UPLOAD & STOCK UPLOAD ---
     window.addSnackToFirebase = async () => {
-        const n = document.getElementById('newItemName').value;
-        const p = document.getElementById('newItemPrice').value;
-        const wp = document.getElementById('newItemWholesalePrice').value;
-        const wq = document.getElementById('newItemWholesaleQty').value; 
-        const sq = document.getElementById('newItemStock').value; 
-        const avail = document.getElementById('newItemAvail').checked;
-        const fileInput = document.getElementById('newItemImage');
-        const file = fileInput.files[0];
-
+        const n = document.getElementById('newItemName').value, p = document.getElementById('newItemPrice').value, wp = document.getElementById('newItemWholesalePrice').value, wq = document.getElementById('newItemWholesaleQty').value, sq = document.getElementById('newItemStock').value, avail = document.getElementById('newItemAvail').checked, fileInput = document.getElementById('newItemImage'), file = fileInput.files[0];
         if(n && p) { 
-            const btn = document.getElementById('addSnackBtnAction');
-            btn.innerText = "Processing & Saving...";
-            btn.disabled = true;
-
+            const btn = document.getElementById('addSnackBtnAction'); btn.innerText = "Processing & Saving..."; btn.disabled = true;
             let uploadedImgBase64 = null;
-
             try {
-                if (file) {
-                    uploadedImgBase64 = await processImage(file);
-                }
-
-                await addDoc(collection(db,"menu"), {
-                    name: n, 
-                    price: Number(p),
-                    wholesalePrice: wp ? Number(wp) : Number(p),
-                    wholesaleQty: wq ? Number(wq) : null, // Defaults to NO DISCOUNT if left blank
-                    stockQty: sq ? Number(sq) : 0, 
-                    isAvailable: avail,
-                    imgUrl: uploadedImgBase64 
-                }); 
-                
-                document.getElementById('newItemName').value=''; 
-                document.getElementById('newItemPrice').value=''; 
-                document.getElementById('newItemWholesalePrice').value=''; 
-                document.getElementById('newItemWholesaleQty').value=''; 
-                document.getElementById('newItemStock').value='';
-                fileInput.value = '';
-                showToast("Item Added"); 
-            } catch (error) {
-                alert("Error: " + error.message);
-            } finally {
-                btn.innerText = "Add Item";
-                btn.disabled = false;
-            }
-        } else {
-            showToast("Please enter a name and a normal price.");
-        }
+                if (file) { uploadedImgBase64 = await processImage(file); }
+                await addDoc(collection(db,"menu"), { name: n, price: Number(p), wholesalePrice: wp ? Number(wp) : Number(p), wholesaleQty: wq ? Number(wq) : null, stockQty: sq ? Number(sq) : 0, isAvailable: avail, imgUrl: uploadedImgBase64 }); 
+                document.getElementById('newItemName').value=''; document.getElementById('newItemPrice').value=''; document.getElementById('newItemWholesalePrice').value=''; document.getElementById('newItemWholesaleQty').value=''; document.getElementById('newItemStock').value=''; fileInput.value = ''; showToast("Item Added"); 
+            } catch (error) { alert("Error: " + error.message); } finally { btn.innerText = "Add Item"; btn.disabled = false; }
+        } else { showToast("Please enter a name and a normal price."); }
     }
 
     window.delMenu = async (id) => { if(confirm("Delete item?")) await deleteDoc(doc(db,"menu",id)); }
     
-    // --- ADMIN BASKET WHOLESALE LOGIC WITH ADMIN STOCK CHECK ---
     window.addToBasket = () => {
-        const sel = document.getElementById('snackSelector'), qtyInput = document.getElementById('inputQty');
-        let qty = Number(qtyInput.value);
+        const sel = document.getElementById('snackSelector'), qtyInput = document.getElementById('inputQty'); let qty = Number(qtyInput.value);
         if(!sel.value) { showToast("Select an item first"); return; }
         if(qty < 1) qty = 1; 
-        
-        const item = menuData.find(i => i.id === sel.value);
-        const existing = currentBasket.find(x => x.id === item.id);
-        
-        // Prevent admin from adding more than stock
-        if (item.stockQty !== undefined && (existing ? existing.qty + qty : qty) > item.stockQty) {
-            window.showToast("Not enough stock! Current stock: " + item.stockQty);
-            return;
-        }
-
+        const item = menuData.find(i => i.id === sel.value); const existing = currentBasket.find(x => x.id === item.id);
+        if (item.stockQty !== undefined && (existing ? existing.qty + qty : qty) > item.stockQty) { window.showToast("Not enough stock! Current stock: " + item.stockQty); return; }
         if(existing) { 
             existing.qty += qty; 
             const isWholesale = item.wholesaleQty ? existing.qty >= item.wholesaleQty : false;
             const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
-            existing.total = unitPrice * existing.qty; 
-            existing.appliedPrice = unitPrice;
-        } 
-        else { 
+            existing.total = unitPrice * existing.qty; existing.appliedPrice = unitPrice;
+        } else { 
             const isWholesale = item.wholesaleQty ? qty >= item.wholesaleQty : false;
             const unitPrice = (isWholesale && item.wholesalePrice) ? item.wholesalePrice : item.price;
-            currentBasket.push({
-                id: item.id, 
-                name: item.name, 
-                price: item.price, 
-                wholesalePrice: item.wholesalePrice, 
-                wholesaleQty: item.wholesaleQty || null,
-                appliedPrice: unitPrice, 
-                qty: qty, 
-                total: unitPrice * qty
-            }); 
+            currentBasket.push({ id: item.id, name: item.name, price: item.price, wholesalePrice: item.wholesalePrice, wholesaleQty: item.wholesaleQty || null, appliedPrice: unitPrice, qty: qty, total: unitPrice * qty }); 
         }
         updBasket(); sel.value = ""; qtyInput.value = "1"; sel.focus();
     }
 
     window.changeQty = (idx, delta) => {
-        const i = currentBasket[idx];
-        const item = menuData.find(x => x.id === i.id);
-        
-        if (delta > 0 && item && item.stockQty !== undefined && i.qty + delta > item.stockQty) {
-            window.showToast("Not enough stock! Current stock: " + item.stockQty);
-            return;
-        }
-
+        const i = currentBasket[idx]; const item = menuData.find(x => x.id === i.id);
+        if (delta > 0 && item && item.stockQty !== undefined && i.qty + delta > item.stockQty) { window.showToast("Not enough stock! Current stock: " + item.stockQty); return; }
         currentBasket[idx].qty += delta;
-        if(currentBasket[idx].qty <= 0) {
-            currentBasket.splice(idx, 1); 
-        } else {
+        if(currentBasket[idx].qty <= 0) { currentBasket.splice(idx, 1); } else {
             const isWholesale = i.wholesaleQty ? i.qty >= i.wholesaleQty : false;
             const unitPrice = (isWholesale && i.wholesalePrice) ? i.wholesalePrice : i.price;
-            i.appliedPrice = unitPrice;
-            i.total = unitPrice * i.qty;
+            i.appliedPrice = unitPrice; i.total = unitPrice * i.qty;
         }
         updBasket();
     }
@@ -1613,8 +1405,7 @@
         if(currentBasket.length===0){box.style.display='none';return;}
         box.style.display='block'; lst.innerHTML=''; let tot=0;
         currentBasket.forEach((i, idx) => { 
-            tot+=i.total; 
-            const isWholesale = i.wholesaleQty ? i.qty >= i.wholesaleQty : false;
+            tot+=i.total; const isWholesale = i.wholesaleQty ? i.qty >= i.wholesaleQty : false;
             const tag = (isWholesale && i.wholesalePrice && i.wholesalePrice < i.price) ? `<b style="color:var(--green)">Wholesale</b>` : `Normal`;
             lst.innerHTML+=`<div class="basket-item"><div style="flex:2;"><b>${i.name}</b><br><span style="font-size:11px; opacity:0.7">@₦${i.appliedPrice} (${tag})</span></div><div class="qty-ctrl"><button class="qty-btn" onclick="window.changeQty(${idx}, -1)">-</button><span style="width:20px; text-align:center;">${i.qty}</span><button class="qty-btn" onclick="window.changeQty(${idx}, 1)">+</button></div><div style="flex:1; text-align:right;">₦${i.total.toLocaleString()}</div></div>`; 
         });
@@ -1634,8 +1425,7 @@
     }
 
     window.calcDailyStats = () => {
-        const today = new Date().toDateString();
-        document.getElementById('reportDate').innerText = today;
+        const today = new Date().toDateString(); document.getElementById('reportDate').innerText = today;
         let c=0, d=0, itemsMap={};
         salesData.forEach(s => {
             if(s.dateObj.toDateString() === today) {
@@ -1645,26 +1435,17 @@
         });
         let topItem = "None", max = 0;
         for(let [k,v] of Object.entries(itemsMap)) { if(v > max) { max = v; topItem = k; } }
-        document.getElementById('todayCash').innerText = "₦"+c.toLocaleString();
-        document.getElementById('todayDebt').innerText = "₦"+d.toLocaleString();
-        document.getElementById('todayTopItem').innerText = topItem + (max>0 ? ` (${max} sales)` : "");
+        document.getElementById('todayCash').innerText = "₦"+c.toLocaleString(); document.getElementById('todayDebt').innerText = "₦"+d.toLocaleString(); document.getElementById('todayTopItem').innerText = topItem + (max>0 ? ` (${max} sales)` : "");
     }
 
     window.autoFillPhone = () => {
-        const val=document.getElementById('custName').value;
-        const f=customerData.find(c=>c.name===val);
+        const val=document.getElementById('custName').value; const f=customerData.find(c=>c.name===val);
         if(f) document.getElementById('custPhone').value=f.phone;
     }
     
     window.pickContact = async function() {
         if ('contacts' in navigator && 'ContactsManager' in window) {
-            try {
-                const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
-                if (contacts[0]) {
-                    if (contacts[0].name) document.getElementById('custName').value = contacts[0].name[0];
-                    if (contacts[0].tel) document.getElementById('custPhone').value = contacts[0].tel[0].replace(/[\s-]/g, '');
-                }
-            } catch (ex) { console.log(ex); }
+            try { const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false }); if (contacts[0]) { if (contacts[0].name) document.getElementById('custName').value = contacts[0].name[0]; if (contacts[0].tel) document.getElementById('custPhone').value = contacts[0].tel[0].replace(/[\s-]/g, ''); } } catch (ex) { console.log(ex); }
         } else { showToast("Contact picker not supported on this device."); }
     };
 
@@ -1673,117 +1454,61 @@
 
     // --- TAB 2: MARKET LOGIC ---
     window.renderMarketList = () => {
-        const tbody = document.getElementById('m_listBody');
-        tbody.innerHTML = "";
-        let total = 0;
+        const tbody = document.getElementById('m_listBody'); tbody.innerHTML = ""; let total = 0;
         marketData.forEach((item) => {
-            const sub = item.price * item.qty;
-            total += sub;
-            tbody.insertAdjacentHTML('beforeend', `
-            <tr style="border-bottom:1px solid #eee">
-                <td>${item.name}<br><small>@${item.price}</small></td>
-                <td align="center">${item.qty}</td>
-                <td align="right">₦${sub.toFixed(2)}</td>
-                <td align="right"><button class="m-del-btn" onclick="window.openEditMarket('${item.id}')" style="color:var(--blue); background:none; border:none; cursor:pointer;">✏️</button> <button class="m-del-btn" onclick="window.delMarketItem('${item.id}')" style="color:var(--red); background:none; border:none; cursor:pointer;">X</button></td>
-            </tr>`);
+            const sub = item.price * item.qty; total += sub;
+            tbody.insertAdjacentHTML('beforeend', `<tr style="border-bottom:1px solid #eee"><td>${item.name}<br><small>@${item.price}</small></td><td align="center">${item.qty}</td><td align="right">₦${sub.toFixed(2)}</td><td align="right"><button class="m-del-btn" onclick="window.openEditMarket('${item.id}')" style="color:var(--blue); background:none; border:none; cursor:pointer;">✏️</button> <button class="m-del-btn" onclick="window.delMarketItem('${item.id}')" style="color:var(--red); background:none; border:none; cursor:pointer;">X</button></td></tr>`);
         });
         document.getElementById('m_grandTotal').innerText = total.toFixed(2);
     }
 
     const mAddBtn = document.getElementById('m_addItemBtn');
-    if(mAddBtn) {
-        mAddBtn.addEventListener('click', async () => {
-            const name = document.getElementById('m_productName').value;
-            const price = parseFloat(document.getElementById('m_productPrice').value);
-            const qty = parseInt(document.getElementById('m_productQty').value);
-            if (!name || isNaN(price)) return;
-            await addDoc(collection(db, "market"), { name, price, qty });
-            document.getElementById('m_productName').value = "";
-            document.getElementById('m_productPrice').value = "";
-        });
-    }
+    if(mAddBtn) { mAddBtn.addEventListener('click', async () => { const name = document.getElementById('m_productName').value; const price = parseFloat(document.getElementById('m_productPrice').value); const qty = parseInt(document.getElementById('m_productQty').value); if (!name || isNaN(price)) return; await addDoc(collection(db, "market"), { name, price, qty }); document.getElementById('m_productName').value = ""; document.getElementById('m_productPrice').value = ""; }); }
 
     window.delMarketItem = async (id) => { await deleteDoc(doc(db, "market", id)); }
 
     window.openEditMarket = (id) => {
-        const item = marketData.find(m => m.id === id);
-        if(!item) return;
-        document.getElementById('editMktId').value = id;
-        document.getElementById('editMktName').value = item.name;
-        document.getElementById('editMktPrice').value = item.price;
-        document.getElementById('editMktQty').value = item.qty;
-        document.getElementById('editMarketModal').style.display='block';
-        document.getElementById('modalOverlay').style.display='block';
+        const item = marketData.find(m => m.id === id); if(!item) return;
+        document.getElementById('editMktId').value = id; document.getElementById('editMktName').value = item.name;
+        document.getElementById('editMktPrice').value = item.price; document.getElementById('editMktQty').value = item.qty;
+        document.getElementById('editMarketModal').style.display='block'; document.getElementById('modalOverlay').style.display='block';
     }
 
     window.saveMarketItemEdit = async () => {
-        const id = document.getElementById('editMktId').value;
-        const name = document.getElementById('editMktName').value;
-        const price = parseFloat(document.getElementById('editMktPrice').value);
-        const qty = parseInt(document.getElementById('editMktQty').value);
-        await updateDoc(doc(db, "market", id), { name, price, qty });
-        window.closeModal();
+        const id = document.getElementById('editMktId').value; const name = document.getElementById('editMktName').value; const price = parseFloat(document.getElementById('editMktPrice').value); const qty = parseInt(document.getElementById('editMktQty').value);
+        await updateDoc(doc(db, "market", id), { name, price, qty }); window.closeModal();
     }
 
     window.saveMarketList = async () => {
         if(marketData.length === 0) { showToast("List is empty!"); return; }
         if(confirm("Save this list to history and clear it?")) {
-            const batchId = new Date().toISOString();
-            const total = marketData.reduce((sum, i) => sum + (i.price*i.qty), 0);
-            await addDoc(collection(db, "market_history"), {
-                date: serverTimestamp(),
-                total: total,
-                items: marketData.map(i => `${i.name} (${i.qty})`).join(", ")
-            });
-            const snap = await getDocs(collection(db, "market"));
-            snap.forEach(d => deleteDoc(doc(db, "market", d.id)));
-            showToast("Market List Archived!");
+            const batchId = new Date().toISOString(); const total = marketData.reduce((sum, i) => sum + (i.price*i.qty), 0);
+            await addDoc(collection(db, "market_history"), { date: serverTimestamp(), total: total, items: marketData.map(i => `${i.name} (${i.qty})`).join(", ") });
+            const snap = await getDocs(collection(db, "market")); snap.forEach(d => deleteDoc(doc(db, "market", d.id))); showToast("Market List Archived!");
         }
     }
 
     window.openMarketHistory = () => {
-        const listDiv = document.getElementById('marketHistoryList');
-        listDiv.innerHTML = "Loading...";
-        document.getElementById('marketHistoryModal').style.display='block';
-        document.getElementById('modalOverlay').style.display='block';
+        const listDiv = document.getElementById('marketHistoryList'); listDiv.innerHTML = "Loading...";
+        document.getElementById('marketHistoryModal').style.display='block'; document.getElementById('modalOverlay').style.display='block';
         import("https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js").then(async mod => {
-            const q = mod.query(mod.collection(db, "market_history"), mod.orderBy("date", "desc"), mod.limit(20));
-            const snap = await mod.getDocs(q);
-            listDiv.innerHTML = "";
+            const q = mod.query(mod.collection(db, "market_history"), mod.orderBy("date", "desc"), mod.limit(20)); const snap = await mod.getDocs(q); listDiv.innerHTML = "";
             if(snap.empty) { listDiv.innerHTML = "No history found."; return; }
             snap.forEach(d => {
-                const h = d.data();
-                const date = h.date ? h.date.toDate().toLocaleDateString() : "Unknown";
-                listDiv.innerHTML += `
-                <div style="border-bottom:1px solid #eee; padding:10px 0;">
-                    <div style="display:flex; justify-content:space-between; font-weight:bold;">
-                        <span>📅 ${date}</span>
-                        <span>₦${h.total.toLocaleString()}</span>
-                    </div>
-                    <div style="font-size:12px; color:#555; margin-top:5px;">${h.items}</div>
-                </div>`;
+                const h = d.data(); const date = h.date ? h.date.toDate().toLocaleDateString() : "Unknown";
+                listDiv.innerHTML += `<div style="border-bottom:1px solid #eee; padding:10px 0;"><div style="display:flex; justify-content:space-between; font-weight:bold;"><span>📅 ${date}</span><span>₦${h.total.toLocaleString()}</span></div><div style="font-size:12px; color:#555; margin-top:5px;">${h.items}</div></div>`;
             });
         });
     }
 
     window.downloadMarketPDF = () => {
         if(marketData.length === 0) { showToast("List is empty!"); return; }
-        const tbody = document.getElementById('printBody');
-        tbody.innerHTML = "";
-        let total = 0;
+        const tbody = document.getElementById('printBody'); tbody.innerHTML = ""; let total = 0;
         marketData.forEach(item => {
-            const sub = item.price * item.qty;
-            total += sub;
-            tbody.innerHTML += `<tr>
-                <td style="padding:8px;">${item.name}</td>
-                <td style="padding:8px;">₦${item.price}</td>
-                <td style="padding:8px;">${item.qty}</td>
-                <td style="padding:8px;">₦${sub}</td>
-            </tr>`;
+            const sub = item.price * item.qty; total += sub;
+            tbody.innerHTML += `<tr><td style="padding:8px;">${item.name}</td><td style="padding:8px;">₦${item.price}</td><td style="padding:8px;">${item.qty}</td><td style="padding:8px;">₦${sub}</td></tr>`;
         });
-        document.getElementById('printTotal').innerText = total.toLocaleString();
-        document.getElementById('printDate').innerText = new Date().toLocaleString();
-        window.print();
+        document.getElementById('printTotal').innerText = total.toLocaleString(); document.getElementById('printDate').innerText = new Date().toLocaleString(); window.print();
     }
 </script>
 </body>
